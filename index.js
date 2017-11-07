@@ -1,3 +1,9 @@
+//
+//
+// Original code samuelmr/nordpool-ifttt
+// 7.11.2017 PetriKarj, added dynamic intraday hours
+//
+//
 const schedule = require('node-schedule');
 const nordpool = require('nordpool');
 const moment = require('moment-timezone');
@@ -5,6 +11,7 @@ const prices = new nordpool.Prices();
 const config = require('./config');
 const findStreak = require('findstreak');
 const request = require('request');
+const del = require('del');
 
 const lowEvent = 'nordpool-price-low';
 const normEvent = 'nordpool-price-normal';
@@ -20,13 +27,40 @@ getPrices();
 
 // Prices for tomorrow are published today at 12:42 CET or later
 // (http://www.nordpoolspot.com/How-does-it-work/Day-ahead-market-Elspot-/)
-// update prices at 13:00 UTC
-let cronPattern = moment.tz('13:00Z', 'HH:mm:Z', myTZ).format('m H * * *');
-// cronPattern = '* */12 * * *';
-// console.log(cronPattern);
+// update prices at 15:15 UTC
+let cronPattern = moment.tz('15:15Z', 'HH:mm:Z', myTZ).format('m H * * *');
 let getPricesJob = schedule.scheduleJob(cronPattern, getPrices);
 
+
+//
+// 7.11.2017 PeriKarj aadded min and max functions, idea from stackoverflow
+//
+function findIndicesOfMin(inp, count) {
+    var outp = [];
+    for (var i = 0; i < inp.length; i++) {
+        outp.push(i); // add index to output array
+        if (outp.length > count) {
+            outp.sort(function(a, b) { return inp[a].value - inp[b].value; }); // descending sort the output array
+            outp.pop(); // remove the last index (index of smallest element in output array)
+        }
+    }
+    return outp;
+}
+function findIndicesOfMax(inp, count) {
+    var outp = [];
+    for (var i = 0; i < inp.length; i++) {
+        outp.push(i); // add index to output array
+        if (outp.length > count) {
+            outp.sort(function(a, b) { return inp[b].value - inp[a].value; }); // ascending sort the output array
+            outp.pop(); // remove the last index (index of largest element in output array)
+        }
+    }
+    return outp;
+}
+
+
 function getPrices() {
+  console.clear();
   prices.hourly(config, (error, results) => {
     if (error) {
       console.error(error);
@@ -35,21 +69,39 @@ function getPrices() {
     let events = [];
     let tmpHours = [];
     let previousEvent = normEvent;
+
+	console.log(results);
+	var expensivehours=findIndicesOfMax(results,config.numLowHours);
+	console.log(expensivehours);
+	var cheaphours=findIndicesOfMin(results,config.numLowHours);
+	console.log(cheaphours);
+
     results.forEach((item, index) => {
-      item.date.tz(myTZ);
-      if (config.vatPercent) {
-        item.value = Math.round(item.value * (100 + config.vatPercent))/100;
-      }
-      if (item.value > config.highTreshold) {
+      let price = item.value; // float, EUR/MWh
+	  item.event = normEvent;
+
+	//
+	// dynamic intraday cheap and expensive hours, added by PetriKarj 7.11.2017
+	//
+	  if (expensivehours.includes(index)) {
         item.event = highEvent;
       }
-      else if (item.value < config.lowTreshold) {
+      else if (cheaphours.includes(index)) {
         item.event = lowEvent;
+      };
+
+	//
+	// hardcoded threshold values
+	//
+ 	  if (price > config.highTreshold) {
+        item.event = highEvent;
       }
-      else {
-        item.event = normEvent;
-      }
-      // treshold crossed; let's see what we have stored...
+      else if (price < config.lowTreshold) {
+        item.event = lowEvent;
+      };
+
+		item.date.tz(myTZ);
+
       if (item.event != previousEvent) {
         var max = 24;
         var lo = false;
@@ -60,48 +112,36 @@ function getPrices() {
           max = config.maxLowHours;
           var lo = true;
         }
+
         let rf = (a, b) => a + b.value;
-        // stored values exist
         if (tmpHours.length > 0) {
-          // find correct number of hours
           let streak = findStreak(tmpHours, max, rf, lo);
-          // no events for the first normal streak 
-          if ((events.length > 0) || (previousEvent != normEvent)) {
-            // create an event from the first hour in the streak
-            events.push(streak[0]);
-          }
-          // if only some of the stored hours were included in the streak,
-          // mark the rest of the hours as normal and trigger events
+          events.push(streak[0]);
           if ((previousEvent != normEvent) && (streak.length < tmpHours.length)) {
             let firstIndex = streak[0].date.get('hours') - tmpHours[0].date.get('hours');
-            let lastIndex = firstIndex + streak.length;
-            // hours were clipped from the beginning of stored hours
             if (firstIndex > 0) {
               tmpHours[0].event = normEvent;
               events.push(tmpHours[0]);
             }
-            // hours were clipped from the end of stored hours
-            if (tmpHours.length > lastIndex) {
-              tmpHours[lastIndex].event = normEvent;
-              events.push(tmpHours[lastIndex]);
+            if (firstIndex < (tmpHours.length - streak.length)) {
+              tmpHours[firstIndex + streak.length].event = normEvent;
+              events.push(tmpHours[firstIndex + streak.length]);
             }
           }
         }
-        // start a new treshold interval
         previousEvent = item.event;
         tmpHours = [];
       }
-      // last hour in the Nordpool results, create event at the first stored hour
       else if (index == results.length - 1) {
         events.push(tmpHours[0]);
       }
-      // store all items in the current treshold interval
       tmpHours.push(item);
+	  console.log(item.date.format('H:mm'), item.value, item.event)
     });
-    // console.log(events);
+    console.log(events);
     events.forEach(item => {
       jobs.push(schedule.scheduleJob(item.date.toDate(), trigger.bind(null, item)));
-      console.log(item.date.format('D.M. H:mm'), item.value, item.event)
+      console.log(item.date.format('H:mm'), item.value, item.event)
     });
   });
 }
