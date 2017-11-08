@@ -12,26 +12,23 @@ const prices = new nordpool.Prices();
 const config = require('./config');
 const findStreak = require('findstreak');
 const request = require('request');
-
-
 const lowEvent = 'nordpool-price-low';
 const normEvent = 'nordpool-price-normal';
 const highEvent = 'nordpool-price-high';
-
 const iftttUrl = 'https://maker.ifttt.com/trigger/';
 
 let myTZ = moment.tz.guess();
 let jobs = [];
 
 // get latest prices immediately
-getPrices();
+getPrices(1);
+
 
 // Prices for tomorrow are published today at 12:42 CET or later
 // (http://www.nordpoolspot.com/How-does-it-work/Day-ahead-market-Elspot-/)
-// update prices at 15:15 UTC
-let cronPattern = moment.tz('15:15Z', 'HH:mm:Z', myTZ).format('m H * * *');
+// update prices at 22:30UTC for coming day, its just last hour of a elspot system day
+let cronPattern = moment.tz('22:30Z', 'HH:mm:Z', myTZ).format('m H * * *');
 let getPricesJob = schedule.scheduleJob(cronPattern, getPrices);
-
 
 //
 // 7.11.2017 PeriKarj aadded min and max functions, idea from stackoverflow
@@ -60,9 +57,22 @@ function findIndicesOfMax(inp, count) {
 }
 
 
-function getPrices() {
+function getPrices(inp) {
   console.clear();
-  console.log("Getting prices...");
+  let now = new Date();
+  console.log('Getprices run at (UTC) ',now);
+  let today = moment(now.setDate(now.getDate()), config.dateFormats).format('YYYY-MM-DD')+'T23:00:00'
+  let tomorrow = moment(now.setDate(now.getDate()+1), config.dateFormats).format('YYYY-MM-DD')+'T23:00:00'
+
+  if (inp===undefined){
+    // function getPrices was called by cronjob or second time
+    config.to=tomorrow;
+    }
+    else {
+      // function getPrices was called for first time
+      config.to=today;
+    }
+
   prices.hourly(config, (error, results) => {
     if (error) {
       console.error(error);
@@ -135,7 +145,7 @@ function getPrices() {
        }
        previousEvent=item.event;
        events.push(item);
-       //console.log('CET: ', item.date.format('H:mm'), item.value, item.event)
+//       console.log('CET: ', item.date.format('H:mm'), item.value, item.event)
     });
 
 
