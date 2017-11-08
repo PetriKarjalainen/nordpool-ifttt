@@ -2,6 +2,8 @@
 # Trigger Nordpool/Elspot price change events to your IFTTT Maker Channel
 Gets day-ahead prices from [Nordpool](http://www.nordpoolspot.com/Market-data1/Elspot/)
 
+Added dynamic intraday prices by PetriKarj to detect highest priced and lowest priced hours for any given day.
+
 ## Installation
     npm install nordpool-ifttt
     cd nordpool-ifttt

@@ -2,6 +2,7 @@
 //
 // Original code samuelmr/nordpool-ifttt
 // 7.11.2017 PetriKarj, added dynamic intraday hours
+// source: https://github.com/PetriKarjalainen/nordpool-ifttt
 //
 //
 const schedule = require('node-schedule');
@@ -11,7 +12,7 @@ const prices = new nordpool.Prices();
 const config = require('./config');
 const findStreak = require('findstreak');
 const request = require('request');
-const del = require('del');
+
 
 const lowEvent = 'nordpool-price-low';
 const normEvent = 'nordpool-price-normal';
@@ -61,6 +62,7 @@ function findIndicesOfMax(inp, count) {
 
 function getPrices() {
   console.clear();
+  console.log("Getting prices...");
   prices.hourly(config, (error, results) => {
     if (error) {
       console.error(error);
@@ -69,79 +71,87 @@ function getPrices() {
     let events = [];
     let tmpHours = [];
     let previousEvent = normEvent;
+    let counterHighEvent=0;
+    let counterLowEvent=0;
 
-	console.log(results);
-	var expensivehours=findIndicesOfMax(results,config.numLowHours);
-	console.log(expensivehours);
+	//console.log(results);
+	var expensivehours=findIndicesOfMax(results,config.numHighHours);
+	console.log('CET Expensive hours: ' + expensivehours);
 	var cheaphours=findIndicesOfMin(results,config.numLowHours);
-	console.log(cheaphours);
+	console.log('CET Cheap hours: ' + cheaphours);
 
-    results.forEach((item, index) => {
+
+  //
+  // Classify prices to categories and define event type
+  //
+  results.forEach((item, index) => {
+
       let price = item.value; // float, EUR/MWh
-	  item.event = normEvent;
+	    item.event = normEvent;
 
-	//
-	// dynamic intraday cheap and expensive hours, added by PetriKarj 7.11.2017
-	//
-	  if (expensivehours.includes(index)) {
-        item.event = highEvent;
-      }
-      else if (cheaphours.includes(index)) {
-        item.event = lowEvent;
-      };
+	   //
+	   // dynamic intraday cheap and expensive hours, added by PetriKarj 7.11.2017
+	   //
+	   if (expensivehours.includes(index)) {
+         item.event = highEvent;
+       }
+       else if (cheaphours.includes(index)) {
+         item.event = lowEvent;
+       };
 
-	//
-	// hardcoded threshold values
-	//
- 	  if (price > config.highTreshold) {
-        item.event = highEvent;
-      }
-      else if (price < config.lowTreshold) {
-        item.event = lowEvent;
-      };
+	   //
+	   // hardcoded threshold values
+	   //
+ 	   if (price > config.highTreshold) {
+         item.event = highEvent;
+       }
+       else if (price < config.lowTreshold) {
+         item.event = lowEvent;
+       };
 
-		item.date.tz(myTZ);
-
-      if (item.event != previousEvent) {
-        var max = 24;
-        var lo = false;
-        if (previousEvent == highEvent) {
-          max = config.maxHighHours;
-        }
-        else if (previousEvent == lowEvent) {
-          max = config.maxLowHours;
-          var lo = true;
-        }
-
-        let rf = (a, b) => a + b.value;
-        if (tmpHours.length > 0) {
-          let streak = findStreak(tmpHours, max, rf, lo);
-          events.push(streak[0]);
-          if ((previousEvent != normEvent) && (streak.length < tmpHours.length)) {
-            let firstIndex = streak[0].date.get('hours') - tmpHours[0].date.get('hours');
-            if (firstIndex > 0) {
-              tmpHours[0].event = normEvent;
-              events.push(tmpHours[0]);
-            }
-            if (firstIndex < (tmpHours.length - streak.length)) {
-              tmpHours[firstIndex + streak.length].event = normEvent;
-              events.push(tmpHours[firstIndex + streak.length]);
-            }
-          }
-        }
-        previousEvent = item.event;
-        tmpHours = [];
-      }
-      else if (index == results.length - 1) {
-        events.push(tmpHours[0]);
-      }
-      tmpHours.push(item);
-	  console.log(item.date.format('H:mm'), item.value, item.event)
+       //
+       // Lets check that the amount of consequent hours is not exceeded
+       // config.maxHighHours, config.maxLowHours
+       //
+       if (item.event === previousEvent){
+         if(item.event === highEvent){
+           counterHighEvent++;
+           if (counterHighEvent >= config.maxHighHours){
+             item.event=normEvent;
+             counterHighEvent=0;
+           }
+         }
+         if (item.event === lowEvent){
+           counterLowEvent++;
+           if (counterLowEvent >= config.maxLowHours){
+             item.event=normEvent;
+             counterLowEvent=0;
+           }
+         }
+       }
+       else {
+         counterHighEvent=0;
+         counterLowEvent=0;
+       }
+       previousEvent=item.event;
+       events.push(item);
+       //console.log('CET: ', item.date.format('H:mm'), item.value, item.event)
     });
-    console.log(events);
-    events.forEach(item => {
-      jobs.push(schedule.scheduleJob(item.date.toDate(), trigger.bind(null, item)));
-      console.log(item.date.format('H:mm'), item.value, item.event)
+
+
+      //
+      // Schedule events in local timezone
+      //
+      events.forEach(item => {
+      if(item.event === previousEvent){
+        // dont post anything as event is already active
+      }
+      else {
+        item.date.tz(myTZ);
+        jobs.push(schedule.scheduleJob(item.date.toDate(), trigger.bind(null, item)));
+        console.log('Scheduling: ',item.date.format('dddd H:mm'), item.value, item.event);
+        previousEvent=item.event;
+        }
     });
   });
 }
