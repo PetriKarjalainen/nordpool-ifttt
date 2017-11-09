@@ -21,12 +21,11 @@ let myTZ = moment.tz.guess();
 let jobs = [];
 
 // get latest prices immediately
-getPrices(1);
-
+getPrices();
 
 // Prices for tomorrow are published today at 12:42 CET or later
 // (http://www.nordpoolspot.com/How-does-it-work/Day-ahead-market-Elspot-/)
-// update prices at 22:30UTC for coming day, its just last hour of a elspot system day
+// update prices at 22:30UTC for coming day, its just LAST hour of a elspot system day
 let cronPattern = moment.tz('22:30Z', 'HH:mm:Z', myTZ).format('m H * * *');
 let getPricesJob = schedule.scheduleJob(cronPattern, getPrices);
 
@@ -57,21 +56,15 @@ function findIndicesOfMax(inp, count) {
 }
 
 
-function getPrices(inp) {
-  console.clear();
+function getPrices() {
+  let Average =0; // average electricity day price
+  let counterAverage=0;  // counter for average
+
   let now = new Date();
   console.log('Getprices run at (UTC) ',now);
+  // config.to is needed fr prices.js, otherwise day may not be correct
   let today = moment(now.setDate(now.getDate()), config.dateFormats).format('YYYY-MM-DD')+'T23:00:00'
-  let tomorrow = moment(now.setDate(now.getDate()+1), config.dateFormats).format('YYYY-MM-DD')+'T23:00:00'
-
-  if (inp===undefined){
-    // function getPrices was called by cronjob or second time
-    config.to=tomorrow;
-    }
-    else {
-      // function getPrices was called for first time
-      config.to=today;
-    }
+  config.to=today;
 
   prices.hourly(config, (error, results) => {
     if (error) {
@@ -90,6 +83,15 @@ function getPrices(inp) {
 	var cheaphours=findIndicesOfMin(results,config.numLowHours);
 	console.log('CET Cheap hours: ' + cheaphours);
 
+  //
+  // lets calculate daily average price, needed for determining if price really is high
+  //
+  results.forEach((item, index) => {
+
+      Average= item.value+Average;
+      counterAverage++;
+  })
+  Average=Average/counterAverage;
 
   //
   // Classify prices to categories and define event type
@@ -103,9 +105,11 @@ function getPrices(inp) {
 	   // dynamic intraday cheap and expensive hours, added by PetriKarj 7.11.2017
 	   //
 	   if (expensivehours.includes(index)) {
-         item.event = highEvent;
+         if((price/Average) > (1+(config.threshold/100))) {
+           item.event = highEvent;
+         }
        }
-       else if (cheaphours.includes(index)) {
+     if (cheaphours.includes(index)) {
          item.event = lowEvent;
        };
 
@@ -145,7 +149,7 @@ function getPrices(inp) {
        }
        previousEvent=item.event;
        events.push(item);
-//       console.log('CET: ', item.date.format('H:mm'), item.value, item.event)
+       //       console.log('CET: ', item.date.format('H:mm'), item.value, item.event)
     });
 
 
@@ -162,7 +166,7 @@ function getPrices(inp) {
         console.log('Scheduling: ',item.date.format('dddd H:mm'), item.value, item.event);
         previousEvent=item.event;
         }
-    });
+      });
   });
 }
 
