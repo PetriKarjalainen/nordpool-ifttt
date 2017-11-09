@@ -1,19 +1,19 @@
 {
   "_from": "nordpool-ifttt",
-  "_id": "nordpool-ifttt@0.2.0",
+  "_id": "nordpool-ifttt@0.2.7",
   "_inBundle": false,
   "_integrity": "sha1-U/JC1Y7FlnSqfQUm1k+Ch88yC+k=",
   "_location": "/nordpool-ifttt",
   "_phantomChildren": {},
   "_requested": {
     "type": "tag",
+    "fetchSpec": "latest",
     "registry": true,
     "raw": "nordpool-ifttt",
     "name": "nordpool-ifttt",
     "escapedName": "nordpool-ifttt",
     "rawSpec": "",
-    "saveSpec": null,
-    "fetchSpec": "latest"
+    "saveSpec": null
   },
   "_requiredBy": [
     "#USER",
@@ -24,10 +24,10 @@
   "_spec": "nordpool-ifttt",
   "_where": "C:\\Users\\PetriKarj\\node_modules",
   "author": {
-    "name": "Samuel Rinnetmaki"
+    "name": "Samuel Rinnetmaki, Petri Karjalainen"
   },
   "bugs": {
-    "url": "https://github.com/samuelmr/nordpool-ifttt/issues"
+    "url": "https://github.com/petrikarjalainen/nordpool-ifttt/issues"
   },
   "bundleDependencies": false,
   "dependencies": {
@@ -39,8 +39,8 @@
     "request": "^2.81.0"
   },
   "deprecated": false,
-  "description": "Check Nordpool energy prices and set IFTTT triggers based on your limits",
-  "homepage": "https://github.com/samuelmr/nordpool-ifttt#readme",
+  "description": "Check Nordpool energy prices and set IFTTT triggers based on your limits with dynamic prices",
+  "homepage": "https://github.com/petrikarjalainen/nordpool-ifttt#readme",
   "keywords": [
     "Nordpool",
     "energy",
@@ -50,14 +50,14 @@
   ],
   "license": "ISC",
   "main": "index.js",
-  "name": "nordpool-ifttt",
+  "name": "petrikarjalainen-nordpool-ifttt",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samuelmr/nordpool-ifttt.git"
+    "url": "git+https://github.com/petrikarjalainen/nordpool-ifttt.git"
   },
   "scripts": {
     "start": "pm2 start index.js --name 'Nordpool IFTTT trigger'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "version": "0.2.0"
+  "version": "0.2.7"
 }
